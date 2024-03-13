@@ -300,7 +300,7 @@ void put32bits(uint8_t **buffer, uint32_t value) {
 }
 
 /*
- * Deconding/Encoding functions.
+ * Decoding/Encoding functions.
  */
 
 // 3foo3bar3com0 => foo.bar.com (No full validation is done!)
@@ -394,6 +394,7 @@ bool decode_msg(struct Message *msg, const uint8_t *buffer, size_t size) {
     return false;
 
   decode_header(msg, &buffer);
+  size -= 12;
 
   if (msg->anCount != 0 || msg->nsCount != 0) {
     printf("Only questions expected!\n");
@@ -404,15 +405,25 @@ bool decode_msg(struct Message *msg, const uint8_t *buffer, size_t size) {
   uint32_t qcount = msg->qdCount;
   for (i = 0; i < qcount; i += 1) {
     struct Question *q = calloc(1, sizeof(struct Question));
+    if (q == NULL)
+      return false;
 
-    q->qName = decode_domain_name(&buffer, size);
-    q->qType = get16bits(&buffer);
-    q->qClass = get16bits(&buffer);
-
-    if (q->qName == NULL) {
-      printf("Failed to decode domain name!\n");
+    // Minimum size of 5 bytes, 1 byte for domain, 2 for the type and 2 for
+    // class
+    if (size < 5) {
+      free(q);
       return false;
     }
+
+    q->qName = decode_domain_name(&buffer, size - 4);
+    if (q->qName == NULL) {
+      printf("Failed to decode domain name!\n");
+      free(q);
+      return false;
+    }
+
+    q->qType = get16bits(&buffer);
+    q->qClass = get16bits(&buffer);
 
     // prepend question to questions list
     q->next = msg->questions;
