@@ -1,35 +1,32 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <ifaddrs.h>
-#include <string.h>
-#include <malloc.h>
 #include <errno.h>
-#include <string.h>
+#include <ifaddrs.h>
+#include <malloc.h>
+#include <netdb.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
 
 #define BUFFER_SIZE 1500
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 
+/*
+ * This software is licensed under the CC0.
+ *
+ * This is a _basic_ DNS Server for educational use.
+ * It does not prevent invalid packets from crashing
+ * the server.
+ *
+ * To test start the program and issue a DNS request:
+ *  dig @127.0.0.1 -p 9000 foo.bar.com
+ */
 
 /*
-* This software is licensed under the CC0.
-*
-* This is a _basic_ DNS Server for educational use.
-* It does not prevent invalid packets from crashing
-* the server.
-*
-* To test start the program and issue a DNS request:
-*  dig @127.0.0.1 -p 9000 foo.bar.com 
-*/
-
-
-/*
-* Masks and constants.
-*/
+ * Masks and constants.
+ */
 
 static const uint32_t QR_MASK = 0x8000;
 static const uint32_t OPCODE_MASK = 0x7800;
@@ -64,11 +61,11 @@ enum {
 
 /* Operation Code */
 enum {
-  QUERY_OperationCode = 0, /* standard query */
+  QUERY_OperationCode = 0,  /* standard query */
   IQUERY_OperationCode = 1, /* inverse query */
   STATUS_OperationCode = 2, /* server status request */
   NOTIFY_OperationCode = 4, /* request zone transfer */
-  UPDATE_OperationCode = 5 /* change resource records */
+  UPDATE_OperationCode = 5  /* change resource records */
 };
 
 /* Response Code */
@@ -89,8 +86,8 @@ enum {
 };
 
 /*
-* Types.
-*/
+ * Types.
+ */
 
 /* Question Section */
 struct Question {
@@ -129,13 +126,13 @@ struct Message {
   uint16_t id; /* Identifier */
 
   /* Flags */
-  uint16_t qr; /* Query/Response Flag */
+  uint16_t qr;     /* Query/Response Flag */
   uint16_t opcode; /* Operation Code */
-  uint16_t aa; /* Authoritative Answer Flag */
-  uint16_t tc; /* Truncation Flag */
-  uint16_t rd; /* Recursion Desired */
-  uint16_t ra; /* Recursion Available */
-  uint16_t rcode; /* Response Code */
+  uint16_t aa;     /* Authoritative Answer Flag */
+  uint16_t tc;     /* Truncation Flag */
+  uint16_t rd;     /* Recursion Desired */
+  uint16_t ra;     /* Recursion Available */
+  uint16_t rcode;  /* Response Code */
 
   uint16_t qdCount; /* Question Count */
   uint16_t anCount; /* Answer Record Count */
@@ -146,17 +143,16 @@ struct Message {
   struct Question *questions;
 
   /*
-  * Resource records to be send back.
-  * Every resource record can be in any of the following places.
-  * But every place has a different semantic.
-  */
+   * Resource records to be send back.
+   * Every resource record can be in any of the following places.
+   * But every place has a different semantic.
+   */
   struct ResourceRecord *answers;
   struct ResourceRecord *authorities;
   struct ResourceRecord *additionals;
 };
 
-bool get_A_Record(uint8_t addr[4], const char domain_name[])
-{
+bool get_A_Record(uint8_t addr[4], const char domain_name[]) {
   if (strcmp("foo.bar.com", domain_name) == 0) {
     addr[0] = 192;
     addr[1] = 168;
@@ -168,8 +164,7 @@ bool get_A_Record(uint8_t addr[4], const char domain_name[])
   }
 }
 
-bool get_AAAA_Record(uint8_t addr[16], const char domain_name[])
-{
+bool get_AAAA_Record(uint8_t addr[16], const char domain_name[]) {
   if (strcmp("foo.bar.com", domain_name) == 0) {
     addr[0] = 0xfe;
     addr[1] = 0x80;
@@ -193,8 +188,7 @@ bool get_AAAA_Record(uint8_t addr[16], const char domain_name[])
   }
 }
 
-bool get_TXT_Record(char **addr, const char domain_name[])
-{
+bool get_TXT_Record(char **addr, const char domain_name[]) {
   if (strcmp("foo.bar.com", domain_name) == 0) {
     *addr = "abcdefg";
     return true;
@@ -204,11 +198,10 @@ bool get_TXT_Record(char **addr, const char domain_name[])
 }
 
 /*
-* Debugging functions.
-*/
+ * Debugging functions.
+ */
 
-void print_hex(uint8_t *buf, size_t len)
-{
+void print_hex(uint8_t *buf, size_t len) {
   int i;
   printf("%zu bytes:\n", len);
   for (i = 0; i < len; i += 1)
@@ -216,51 +209,43 @@ void print_hex(uint8_t *buf, size_t len)
   printf("\n");
 }
 
-void print_resource_record(struct ResourceRecord *rr)
-{
+void print_resource_record(struct ResourceRecord *rr) {
   int i;
   while (rr) {
-    printf("  ResourceRecord { name '%s', type %u, class %u, ttl %u, rd_length %u, ",
-      rr->name,
-      rr->type,
-      rr->class,
-      rr->ttl,
-      rr->rd_length
-   );
+    printf("  ResourceRecord { name '%s', type %u, class %u, ttl %u, rd_length "
+           "%u, ",
+           rr->name, rr->type, rr->class, rr->ttl, rr->rd_length);
 
     union ResourceData *rd = &rr->rd_data;
     switch (rr->type) {
-      case A_Resource_RecordType:
-        printf("Address Resource Record { address ");
+    case A_Resource_RecordType:
+      printf("Address Resource Record { address ");
 
-        for (i = 0; i < 4; i += 1)
-          printf("%s%u", (i ? "." : ""), rd->a_record.addr[i]);
+      for (i = 0; i < 4; i += 1)
+        printf("%s%u", (i ? "." : ""), rd->a_record.addr[i]);
 
-        printf(" }");
-        break;
-      case AAAA_Resource_RecordType:
-        printf("AAAA Resource Record { address ");
+      printf(" }");
+      break;
+    case AAAA_Resource_RecordType:
+      printf("AAAA Resource Record { address ");
 
-        for (i = 0; i < 16; i += 1)
-          printf("%s%02x", (i ? ":" : ""), rd->aaaa_record.addr[i]);
+      for (i = 0; i < 16; i += 1)
+        printf("%s%02x", (i ? ":" : ""), rd->aaaa_record.addr[i]);
 
-        printf(" }");
-        break;
-      case TXT_Resource_RecordType:
-        printf("Text Resource Record { txt_data '%s' }",
-          rd->txt_record.txt_data
-        );
-        break;
-      default:
-        printf("Unknown Resource Record { ??? }");
+      printf(" }");
+      break;
+    case TXT_Resource_RecordType:
+      printf("Text Resource Record { txt_data '%s' }", rd->txt_record.txt_data);
+      break;
+    default:
+      printf("Unknown Resource Record { ??? }");
     }
     printf("}\n");
     rr = rr->next;
   }
 }
 
-void print_message(struct Message *msg)
-{
+void print_message(struct Message *msg) {
   struct Question *q;
 
   printf("QUERY { ID: %02x", msg->id);
@@ -272,11 +257,8 @@ void print_message(struct Message *msg)
 
   q = msg->questions;
   while (q) {
-    printf("  Question { qName '%s', qType %u, qClass %u }\n",
-      q->qName,
-      q->qType,
-      q->qClass
-    );
+    printf("  Question { qName '%s', qType %u, qClass %u }\n", q->qName,
+           q->qType, q->qClass);
     q = q->next;
   }
 
@@ -287,13 +269,11 @@ void print_message(struct Message *msg)
   printf("}\n");
 }
 
-
 /*
-* Basic memory operations.
-*/
+ * Basic memory operations.
+ */
 
-size_t get16bits(const uint8_t **buffer)
-{
+size_t get16bits(const uint8_t **buffer) {
   uint16_t value;
 
   memcpy(&value, *buffer, 2);
@@ -302,34 +282,29 @@ size_t get16bits(const uint8_t **buffer)
   return ntohs(value);
 }
 
-void put8bits(uint8_t **buffer, uint8_t value)
-{
+void put8bits(uint8_t **buffer, uint8_t value) {
   memcpy(*buffer, &value, 1);
   *buffer += 1;
 }
 
-void put16bits(uint8_t **buffer, uint16_t value)
-{
+void put16bits(uint8_t **buffer, uint16_t value) {
   value = htons(value);
   memcpy(*buffer, &value, 2);
   *buffer += 2;
 }
 
-void put32bits(uint8_t **buffer, uint32_t value)
-{
+void put32bits(uint8_t **buffer, uint32_t value) {
   value = htonl(value);
   memcpy(*buffer, &value, 4);
   *buffer += 4;
 }
 
-
 /*
-* Deconding/Encoding functions.
-*/
+ * Deconding/Encoding functions.
+ */
 
 // 3foo3bar3com0 => foo.bar.com (No full validation is done!)
-char *decode_domain_name(const uint8_t **buf, size_t len)
-{
+char *decode_domain_name(const uint8_t **buf, size_t len) {
   char domain[256];
   for (int i = 1; i < MIN(256, len); i += 1) {
     uint8_t c = (*buf)[i];
@@ -348,8 +323,7 @@ char *decode_domain_name(const uint8_t **buf, size_t len)
 }
 
 // foo.bar.com => 3foo3bar3com0
-void encode_domain_name(uint8_t **buffer, const char *domain)
-{
+void encode_domain_name(uint8_t **buffer, const char *domain) {
   uint8_t *buf = *buffer;
   const char *beg = domain;
   const char *pos;
@@ -360,7 +334,7 @@ void encode_domain_name(uint8_t **buffer, const char *domain)
     len = pos - beg;
     buf[i] = len;
     i += 1;
-    memcpy(buf+i, beg, len);
+    memcpy(buf + i, beg, len);
     i += len;
 
     beg = pos + 1;
@@ -380,9 +354,7 @@ void encode_domain_name(uint8_t **buffer, const char *domain)
   *buffer += i;
 }
 
-
-void decode_header(struct Message *msg, const uint8_t **buffer)
-{
+void decode_header(struct Message *msg, const uint8_t **buffer) {
   msg->id = get16bits(buffer);
 
   uint32_t fields = get16bits(buffer);
@@ -400,8 +372,7 @@ void decode_header(struct Message *msg, const uint8_t **buffer)
   msg->arCount = get16bits(buffer);
 }
 
-void encode_header(struct Message *msg, uint8_t **buffer)
-{
+void encode_header(struct Message *msg, uint8_t **buffer) {
   put16bits(buffer, msg->id);
 
   int fields = 0;
@@ -416,8 +387,7 @@ void encode_header(struct Message *msg, uint8_t **buffer)
   put16bits(buffer, msg->arCount);
 }
 
-bool decode_msg(struct Message *msg, const uint8_t *buffer, size_t size)
-{
+bool decode_msg(struct Message *msg, const uint8_t *buffer, size_t size) {
   int i;
 
   if (size < 12)
@@ -456,8 +426,7 @@ bool decode_msg(struct Message *msg, const uint8_t *buffer, size_t size)
 
 // For every question in the message add a appropiate resource record
 // in either section 'answers', 'authorities' or 'additionals'.
-void resolve_query(struct Message *msg)
-{
+void resolve_query(struct Message *msg) {
   struct ResourceRecord *beg;
   struct ResourceRecord *rr;
   struct Question *q;
@@ -481,7 +450,7 @@ void resolve_query(struct Message *msg)
     rr->name = strdup(q->qName);
     rr->type = q->qType;
     rr->class = q->qClass;
-    rr->ttl = 60*60; // in seconds; 0 means no caching
+    rr->ttl = 60 * 60; // in seconds; 0 means no caching
 
     printf("Query for '%s'\n", q->qName);
 
@@ -490,46 +459,46 @@ void resolve_query(struct Message *msg)
     // into the answers list.
     // This behavior is probably non-standard!
     switch (q->qType) {
-      case A_Resource_RecordType:
-        rr->rd_length = 4;
-        if (!get_A_Record(rr->rd_data.a_record.addr, q->qName)) {
-          free(rr->name);
-          free(rr);
-          goto next;
-        }
-        break;
-      case AAAA_Resource_RecordType:
-        rr->rd_length = 16;
-        if (!get_AAAA_Record(rr->rd_data.aaaa_record.addr, q->qName)) {
-          free(rr->name);
-          free(rr);
-          goto next;
-        }
-        break;
-      case TXT_Resource_RecordType:
-        if (!get_TXT_Record(&(rr->rd_data.txt_record.txt_data), q->qName)) {
-          free(rr->name);
-          free(rr);
-          goto next;
-        }
-        int txt_data_len = strlen(rr->rd_data.txt_record.txt_data);
-        rr->rd_length = txt_data_len + 1;
-        rr->rd_data.txt_record.txt_data_len = txt_data_len;
-        break;
-      /*
-      case NS_Resource_RecordType:
-      case CNAME_Resource_RecordType:
-      case SOA_Resource_RecordType:
-      case PTR_Resource_RecordType:
-      case MX_Resource_RecordType:
-      case TXT_Resource_RecordType:
-      */
-      default:
+    case A_Resource_RecordType:
+      rr->rd_length = 4;
+      if (!get_A_Record(rr->rd_data.a_record.addr, q->qName)) {
         free(rr->name);
         free(rr);
-        msg->rcode = NotImplemented_ResponseType;
-        printf("Cannot answer question of type %d.\n", q->qType);
         goto next;
+      }
+      break;
+    case AAAA_Resource_RecordType:
+      rr->rd_length = 16;
+      if (!get_AAAA_Record(rr->rd_data.aaaa_record.addr, q->qName)) {
+        free(rr->name);
+        free(rr);
+        goto next;
+      }
+      break;
+    case TXT_Resource_RecordType:
+      if (!get_TXT_Record(&(rr->rd_data.txt_record.txt_data), q->qName)) {
+        free(rr->name);
+        free(rr);
+        goto next;
+      }
+      int txt_data_len = strlen(rr->rd_data.txt_record.txt_data);
+      rr->rd_length = txt_data_len + 1;
+      rr->rd_data.txt_record.txt_data_len = txt_data_len;
+      break;
+    /*
+    case NS_Resource_RecordType:
+    case CNAME_Resource_RecordType:
+    case SOA_Resource_RecordType:
+    case PTR_Resource_RecordType:
+    case MX_Resource_RecordType:
+    case TXT_Resource_RecordType:
+    */
+    default:
+      free(rr->name);
+      free(rr);
+      msg->rcode = NotImplemented_ResponseType;
+      printf("Cannot answer question of type %d.\n", q->qType);
+      goto next;
     }
 
     msg->anCount++;
@@ -539,8 +508,8 @@ void resolve_query(struct Message *msg)
     msg->answers = rr;
     rr->next = beg;
 
-    // jump here to omit question
-    next:
+  // jump here to omit question
+  next:
 
     // process next question
     q = q->next;
@@ -548,8 +517,7 @@ void resolve_query(struct Message *msg)
 }
 
 /* @return false upon failure, true upon success */
-bool encode_resource_records(struct ResourceRecord *rr, uint8_t **buffer)
-{
+bool encode_resource_records(struct ResourceRecord *rr, uint8_t **buffer) {
   int i;
 
   while (rr) {
@@ -561,22 +529,23 @@ bool encode_resource_records(struct ResourceRecord *rr, uint8_t **buffer)
     put16bits(buffer, rr->rd_length);
 
     switch (rr->type) {
-      case A_Resource_RecordType:
-        for (i = 0; i < 4; i += 1)
-          put8bits(buffer, rr->rd_data.a_record.addr[i]);
-        break;
-      case AAAA_Resource_RecordType:
-        for (i = 0; i < 16; i += 1)
-          put8bits(buffer, rr->rd_data.aaaa_record.addr[i]);
-        break;
-      case TXT_Resource_RecordType:
-        put8bits(buffer, rr->rd_data.txt_record.txt_data_len);
-        for (i = 0; i < rr->rd_data.txt_record.txt_data_len; i++)
-          put8bits(buffer, rr->rd_data.txt_record.txt_data[i]);
-        break;
-      default:
-        fprintf(stderr, "Unknown type %u. => Ignore resource record.\n", rr->type);
-        return false;
+    case A_Resource_RecordType:
+      for (i = 0; i < 4; i += 1)
+        put8bits(buffer, rr->rd_data.a_record.addr[i]);
+      break;
+    case AAAA_Resource_RecordType:
+      for (i = 0; i < 16; i += 1)
+        put8bits(buffer, rr->rd_data.aaaa_record.addr[i]);
+      break;
+    case TXT_Resource_RecordType:
+      put8bits(buffer, rr->rd_data.txt_record.txt_data_len);
+      for (i = 0; i < rr->rd_data.txt_record.txt_data_len; i++)
+        put8bits(buffer, rr->rd_data.txt_record.txt_data[i]);
+      break;
+    default:
+      fprintf(stderr, "Unknown type %u. => Ignore resource record.\n",
+              rr->type);
+      return false;
     }
 
     rr = rr->next;
@@ -586,8 +555,7 @@ bool encode_resource_records(struct ResourceRecord *rr, uint8_t **buffer)
 }
 
 /* @return false upon failure, true upon success */
-bool encode_msg(struct Message *msg, uint8_t **buffer)
-{
+bool encode_msg(struct Message *msg, uint8_t **buffer) {
   encode_header(msg, buffer);
 
   struct Question *q = msg->questions;
@@ -614,8 +582,7 @@ bool encode_msg(struct Message *msg, uint8_t **buffer)
   return true;
 }
 
-void free_resource_records(struct ResourceRecord *rr)
-{
+void free_resource_records(struct ResourceRecord *rr) {
   struct ResourceRecord *next;
 
   while (rr) {
@@ -626,8 +593,7 @@ void free_resource_records(struct ResourceRecord *rr)
   }
 }
 
-void free_questions(struct Question *qq)
-{
+void free_questions(struct Question *qq) {
   struct Question *next;
 
   while (qq) {
@@ -638,8 +604,7 @@ void free_questions(struct Question *qq)
   }
 }
 
-int main()
-{
+int main() {
   // buffer for input/output binary packet
   uint8_t buffer[BUFFER_SIZE];
   struct sockaddr_in client_addr;
@@ -659,7 +624,7 @@ int main()
 
   sock = socket(AF_INET, SOCK_DGRAM, 0);
 
-  rc = bind(sock, (struct sockaddr*) &addr, addr_len);
+  rc = bind(sock, (struct sockaddr *)&addr, addr_len);
 
   if (rc != 0) {
     printf("Could not bind: %s\n", strerror(errno));
@@ -676,7 +641,8 @@ int main()
     memset(&msg, 0, sizeof(struct Message));
 
     /* Receive DNS query */
-    nbytes = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *) &client_addr, &addr_len);
+    nbytes = recvfrom(sock, buffer, sizeof(buffer), 0,
+                      (struct sockaddr *)&client_addr, &addr_len);
 
     /* failed to read query */
     if (nbytes < 0) {
@@ -704,6 +670,6 @@ int main()
 
     /* Send DNS response */
     size_t buflen = p - buffer;
-    sendto(sock, buffer, buflen, 0, (struct sockaddr*) &client_addr, addr_len);
+    sendto(sock, buffer, buflen, 0, (struct sockaddr *)&client_addr, addr_len);
   }
 }
